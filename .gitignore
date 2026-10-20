@@ -1,0 +1,32 @@
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Generated conversion output
+*.html
+
+# Local instructions and editor settings
+/yang.txt
+.vscode/
+.idea/
+.omc/
+
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS and temporary files
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
