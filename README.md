@@ -26,11 +26,42 @@ python -m venv .venv
 - 제목, 문단, 강조, 목록, 링크, 이미지, 인용문, 구분선, 표, fenced code block을 지원합니다.
 - `markdown-it-py`: CommonMark 파서이며 표 규칙을 별도로 활성화합니다. 원시 HTML은 실행되지 않도록 텍스트로 이스케이프합니다.
 - `nh3`: Rust ammonia 기반 HTML 정제 라이브러리로 변환 결과에 태그·속성·URL 허용 목록을 적용합니다. 표와 코드 언어 class는 유지합니다.
+- `mdit-py-plugins`: `$...$` 인라인 수식과 `$$...$$` 블록 수식을 구분합니다. 코드 안의 수식 문법은 변환하지 않습니다.
+- `latex2mathml`: LaTeX 수식을 MathML로 변환합니다. 수식도 정제한 뒤 저장하며 JavaScript나 CDN 없이 최신 Chrome, Edge, Firefox, Safari에서 표시합니다.
 - 표 정렬용 인라인 스타일은 제거합니다. 코드 구문 강조, GUI, 웹 서버, 폴더 일괄 변환, 각주 및 체크박스 확장은 구현 범위 밖입니다.
 
 공식 API 참고: [markdown-it-py](https://markdown-it-py.readthedocs.io/en/latest/using.html), [nh3](https://nh3.readthedocs.io/en/latest/).
 
 UTF-8 BOM이 있는 입력도 읽습니다. 상대 링크·이미지 경로는 HTML 기준으로 해석되므로 출력 위치를 옮기면 상대 경로 대상도 함께 배치해야 합니다. 변환기는 외부 자원을 다운로드하지 않습니다. 생성한 HTML을 열면 브라우저가 외부 이미지 등 자원을 요청할 수 있습니다. 외부 링크는 클릭 시 접근합니다. 이미지 파일 자체는 검사하지 않습니다.
+
+## 수식 작성
+
+문장 안에서는 `$...$`, 별도 줄에서는 `$$...$$` 안에 LaTeX 수식을 작성합니다.
+
+```markdown
+에너지 공식은 $E=mc^2$ 입니다.
+
+$$
+x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+$$
+
+$$
+\sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+$$
+```
+
+분수, 위·아래첨자, 제곱근, 합, 적분, 행렬 등 `latex2mathml`이 지원하는 수식을 사용할 수 있습니다. 전체 LaTeX 문서나 사용자 정의 패키지를 실행하는 기능은 아닙니다. 지원하지 않는 명령은 문자로 남을 수 있으며, 파서가 감지한 잘못된 수식은 변환 오류로 보고하고 출력 파일을 쓰지 않습니다.
+
+인라인 수식은 `$` 바로 안쪽에 공백을 넣지 않습니다(`$x$`). 일반 달러 기호는 `\$`로 작성하세요. 코드 블록과 인라인 코드 안의 `$`는 그대로 유지됩니다. `\(...\)`, `\[...\]`, 수식 번호는 지원하지 않습니다. 수식 표시는 브라우저의 MathML 지원과 설치된 글꼴에 따라 달라질 수 있습니다.
+
+Linux/macOS에서는 다음과 같이 실행합니다.
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python md_to_html.py 예제.md -o 예제.html
+.venv/bin/python -m unittest -v
+```
 
 ## 테스트
 

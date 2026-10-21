@@ -67,6 +67,62 @@ class RenderingTests(unittest.TestCase):
         self.assertIn(('html', {'lang': 'ko'}), parsed.elements)
 
 
+class MathTests(unittest.TestCase):
+    def test_inline_math_in_korean_paragraph(self):
+        parsed = Elements(app.markdown_to_html('에너지는 $E=mc^2$ 입니다.'))
+        self.assertTrue(any(tag == 'math' and attrs.get('display') == 'inline'
+                            for tag, attrs in parsed.elements))
+        self.assertIn('msup', [tag for tag, _ in parsed.elements])
+        self.assertIn('에너지는 ', ''.join(parsed.text))
+        self.assertIn(' 입니다.', ''.join(parsed.text))
+
+    def test_block_fraction_root_and_matrix(self):
+        source = r'''$$
+\frac{1}{\sqrt{2}} + \begin{pmatrix}a & b \\ c & d\end{pmatrix}
+$$'''
+        parsed = Elements(app.markdown_to_html(source))
+        self.assertTrue(any(tag == 'math' and attrs.get('display') == 'block'
+                            for tag, attrs in parsed.elements))
+        for tag in ('mfrac', 'msqrt', 'mtable', 'mtr', 'mtd'):
+            self.assertIn(tag, [name for name, _ in parsed.elements])
+
+    def test_sum_and_integral(self):
+        parsed = Elements(app.markdown_to_html(
+            r'$\sum_{i=1}^{n} i$ 그리고 $\int_0^1 x^2\,dx$'))
+        self.assertEqual(sum(tag == 'math' for tag, _ in parsed.elements), 2)
+        self.assertIn('∑', ''.join(parsed.text))
+        self.assertIn('∫', ''.join(parsed.text))
+
+    def test_code_escaped_dollars_and_prices_are_unchanged(self):
+        source = '`$x^2$`\n\n```tex\n$$x^2$$\n```\n\n' + r'\$x\$; 가격 $5 와 $10; $ x $; 닫히지 않은 $x'
+        result = app.markdown_to_html(source)
+        parsed = Elements(result)
+        self.assertNotIn('math', [tag for tag, _ in parsed.elements])
+        self.assertIn('$x^2$', parsed.text)
+        self.assertIn('$$x^2$$\n', parsed.text)
+        self.assertIn('$x$; 가격 $5 와 $10', ''.join(parsed.text))
+
+    def test_math_in_table(self):
+        parsed = Elements(app.markdown_to_html('| 식 |\n| --- |\n| $x^2$ |'))
+        for tag in ('table', 'td', 'math', 'msup'):
+            self.assertIn(tag, [name for name, _ in parsed.elements])
+
+    def test_math_cannot_inject_html_or_unsafe_links(self):
+        source = r'''$\text{<img src=x onerror=alert(1)><script>bad()</script>}$
+
+$\href{javascript:alert(1)}{x}$'''
+        parsed = Elements(app.markdown_to_html(source))
+        self.assertIn('math', [tag for tag, _ in parsed.elements])
+        for tag, attrs in parsed.elements:
+            self.assertNotIn(tag, ('script', 'img'))
+            self.assertNotIn('onerror', attrs)
+            self.assertNotIn('href', attrs)
+
+    def test_invalid_math_reports_conversion_error(self):
+        with self.assertRaisesRegex(ValueError, 'Invalid math expression'):
+            app.markdown_to_html(r'$\sqrt{$')
+
+
 class FileTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -113,6 +169,24 @@ class FileTests(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn('UTF-8', error)
         self.assertFalse(self.source.with_suffix('.html').exists())
+
+    def test_math_document_is_standalone(self):
+        self.source.write_text('한글 $E=mc^2$\n\n$$\n\\frac{1}{2}\n$$', encoding='utf-8')
+        self.assertEqual(self.run_cli(self.source)[0], 0)
+        result = self.source.with_suffix('.html').read_text(encoding='utf-8')
+        parsed = Elements(result)
+        self.assertEqual(sum(tag == 'math' for tag, _ in parsed.elements), 2)
+        self.assertNotIn('script', [tag for tag, _ in parsed.elements])
+        self.assertNotIn('link', [tag for tag, _ in parsed.elements])
+
+    def test_math_error_does_not_overwrite_existing_output(self):
+        target = self.source.with_suffix('.html')
+        target.write_text('preserve me', encoding='utf-8')
+        self.source.write_text(r'$\sqrt{$', encoding='utf-8')
+        code, _, error = self.run_cli(self.source, '--overwrite')
+        self.assertEqual(code, 1)
+        self.assertIn('Invalid math expression', error)
+        self.assertEqual(target.read_text(encoding='utf-8'), 'preserve me')
 
     def test_permission_errors_reported(self):
         with patch.object(Path, 'read_text', side_effect=PermissionError('read denied')):

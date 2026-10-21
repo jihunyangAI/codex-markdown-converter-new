@@ -6,12 +6,28 @@ from pathlib import Path
 import sys
 
 import nh3
+from latex2mathml.converter import convert as latex_to_mathml
 from markdown_it import MarkdownIt
+from mdit_py_plugins.dollarmath import dollarmath_plugin
 
 
 TAGS = {"h1", "h2", "h3", "h4", "h5", "h6", "p", "strong", "em",
         "ul", "ol", "li", "a", "img", "blockquote", "hr", "br", "pre",
         "code", "table", "thead", "tbody", "tr", "th", "td"}
+# Allow presentation MathML, without links, scripts, styles or embedded HTML.
+MATH_TAGS = {"math", "mrow", "mi", "mn", "mo", "mtext", "mspace", "ms",
+             "mfrac", "msqrt", "mroot", "msub", "msup", "msubsup",
+             "munder", "mover", "munderover", "mtable", "mtr", "mtd",
+             "mlabeledtr", "mstyle", "mpadded", "mphantom", "menclose",
+             "mmultiscripts", "mprescripts", "none"}
+MATH_ATTRIBUTES = {"mathvariant", "mathsize", "displaystyle", "scriptlevel",
+                   "stretchy", "symmetric", "largeop", "movablelimits",
+                   "accent", "accentunder", "fence", "separator", "form",
+                   "lspace", "rspace", "minsize", "maxsize", "linethickness",
+                   "bevelled", "numalign", "denomalign", "width", "height",
+                   "depth", "voffset", "rowalign", "columnalign", "rowspacing",
+                   "columnspacing", "rowlines", "columnlines", "columnspan",
+                   "rowspan", "frame", "notation"}
 CSS = """
 body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
   line-height: 1.75; color: #20242a; max-width: 860px; margin: 40px auto;
@@ -25,22 +41,40 @@ code { font-family: Consolas, monospace; }
 pre code { white-space: pre; overflow-wrap: normal; }
 blockquote { border-left: 4px solid #ccd1d8; margin-left: 0; padding-left: 16px; }
 a { color: #1759ab; }
+.math.block { overflow-x: auto; padding: 12px 0; }
 """
 
 
 def sanitize_html(fragment: str) -> str:
     """Keep only the HTML vocabulary needed by the supported Markdown."""
     return nh3.clean(
-        fragment, tags=TAGS,
+        fragment, tags=TAGS | MATH_TAGS | {"span", "div"},
         attributes={"a": {"href", "title"}, "img": {"src", "alt", "title"},
-                    "code": {"class"}, "ol": {"start"}},
+                    "code": {"class"}, "ol": {"start"},
+                    "span": {"class"}, "div": {"class"},
+                    **{tag: MATH_ATTRIBUTES for tag in MATH_TAGS},
+                    "math": MATH_ATTRIBUTES | {"xmlns", "display"}},
         url_schemes={"http", "https", "mailto"},
         clean_content_tags={"script", "style"},
     )
 
 
+def render_math(source: str, options: dict) -> str:
+    """Render TeX as native MathML; no browser scripts or network are needed."""
+    try:
+        return latex_to_mathml(
+            source, display="block" if options["display_mode"] else "inline"
+        )
+    except Exception as exc:
+        # The converter's parsing exceptions do not share a common base class.
+        # Expose them through the CLI's existing conversion-error handling.
+        raise ValueError(f"Invalid math expression ({type(exc).__name__}): {source}") from exc
+
+
 def markdown_to_html(source: str) -> str:
     parser = MarkdownIt("commonmark", {"html": False}).enable("table")
+    parser.use(dollarmath_plugin, renderer=render_math, allow_labels=False,
+               allow_space=False, allow_digits=False)
     return sanitize_html(parser.render(source))
 
 
